@@ -1,173 +1,127 @@
-// lost-items-gateway/server.js - WERSJA POPRAWIONA (Z WALIDACJĄ I QR)
 const express = require('express');
-const multer = require('multer');
 const cors = require('cors');
 const fs = require('fs');
+const path = require('path');
 const xml2js = require('xml2js');
 const QRCode = require('qrcode');
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
-const port = 3001; 
+const port = 3001;
 
-// --- KONFIGURACJA STAŁYCH ---
-const CKAN_API_URL = 'http://localhost:8000/api/3/action'; 
-const DATASET_ID = 'rzeczy-znalezione-samorzady'; 
-// Link kieruje na nasz frontend React (działa na porcie 3000), ze ścieżką /item/[UUID]
-const BASE_QR_LINK = 'http://localhost:3000/item/'; 
+// --- KONFIGURACJA ---
+// Folder na pliki publiczne (CSV, XML, QR)
+const PUBLIC_DIR = path.join(__dirname, 'public_files');
+const HOST_URL = `http://localhost:${port}`; // Adres Twojego serwera
 
-// Oczekiwane kluczowe pola (do sprawdzenia, czy plik XML zawiera podstawową strukturę)
-const WYMAGANE_POLA = [
-    'IdentyfikatorUnikalny', 
-    'KategoriaGlowna', 
-    'Status', 
-    'DataZnalezienia'
-];
+// Upewnij się, że katalogi istnieją
+if (!fs.existsSync(PUBLIC_DIR)) fs.mkdirSync(PUBLIC_DIR);
 
-// --- 1. Konfiguracja Globalna i Serwowanie QR ---
-app.use(cors({
-    origin: 'http://localhost:3000'
-}));
-app.use(express.json());
-// Udostępnienie katalogu temp_uploads pod adresem /qr_images (np. http://localhost:3001/qr_images/...)
-app.use('/qr_images', express.static('temp_uploads')); 
+app.use(cors());
+app.use(express.json({ limit: '10mb' })); // Zwiększony limit dla base64 images
+// Udostępniamy pliki statycznie (żeby XML mógł linkować do CSV)
+app.use('/files', express.static(PUBLIC_DIR));
 
-// --- 2. Konfiguracja Multer do Przechowywania Plików ---
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        if (!fs.existsSync('temp_uploads')) {
-            fs.mkdirSync('temp_uploads');
-        }
-        cb(null, 'temp_uploads/'); 
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const extension = file.originalname.split('.').pop();
-        cb(null, 'data-import-' + uniqueSuffix + '.' + extension);
-    }
-});
-
-const upload = multer({ storage: storage });
-
-// --- FUNKCJA POMOCNICZA: Walidacja i Parsowanie XML ---
 /**
- * Wczytuje i parsuje XML, wykonując podstawową walidację schematu.
- * @param {string} tempFilePath Ścieżka do pliku na serwerze.
- * @returns {object} Znormalizowany obiekt JSON z danymi zgłoszenia.
+ * Funkcja pomocnicza: Generowanie treści CSV
  */
-async function validateAndNormalizeXml(tempFilePath) {
-    const xmlContent = fs.readFileSync(tempFilePath, 'utf8');
-    const parser = new xml2js.Parser({ explicitArray: false, ignoreAttrs: true });
+function generateCSV(formData) {
+    const header = "ID,Kategoria,Podkategoria,Nazwa,Opis,Kolor,Marka,Stan,DataZnalezienia,Miejsce\n";
+    // Zabezpieczenie przecinków w tekście (CSV injection)
+    const escape = (text) => `"${(text || '').replace(/"/g, '""')}"`;
     
-    const result = await parser.parseStringPromise(xmlContent);
-    const zgloszenie = result.ZgloszenieZguby;
+    const row = [
+        uuidv4(),
+        escape(formData.kategoria),
+        escape(formData.podkategoria),
+        escape(formData.nazwa),
+        escape(formData.opis),
+        escape(formData.cechy?.kolor),
+        escape(formData.cechy?.marka),
+        escape(formData.cechy?.stan),
+        escape(formData.data),
+        escape(formData.miejsce)
+    ].join(",");
 
-    if (!zgloszenie) {
-        throw new Error('Błąd struktury: Brak głównego tagu <ZgloszenieZguby>.');
-    }
-
-    // Uproszczona ekstrakcja kluczowych danych do łatwej walidacji
-    const naglowek = zgloszenie.Naglowek || {};
-    const przedmiot = zgloszenie.Przedmiot || {};
-    const daneMagazynowe = zgloszenie.DaneMagazynowe || {};
-    const kontekst = zgloszenie.KontekstZnalezienia || {};
-
-    const extractedData = {
-        IdentyfikatorUnikalny: naglowek.IdentyfikatorUnikalny,
-        KategoriaGlowna: przedmiot.KategoriaGlowna,
-        Status: daneMagazynowe.Status,
-        DataZnalezienia: kontekst.DataZnalezienia
-    };
-
-    let bledy = [];
-    for (const pole of WYMAGANE_POLA) {
-        if (!extractedData[pole]) {
-            bledy.push(`Brak wymaganego pola: ${pole}`);
-        }
-    }
-
-    if (bledy.length > 0) {
-        throw new Error(`Błąd walidacji schematu: ${bledy.join('; ')}`);
-    }
-
-    return zgloszenie;
+    return header + row;
 }
 
+/**
+ * Funkcja pomocnicza: Generowanie treści XML (Metadane z linkiem do CSV)
+ */
+function generateXML(csvFileName, formData) {
+    const builder = new xml2js.Builder();
+    const xmlObj = {
+        'ZgloszenieZguby': {
+            '$': { 'xmlns': 'http://dane.gov.pl/standardy/rzeczy-znalezione' }, // Przykładowa przestrzeń nazw
+            'Naglowek': {
+                'IdentyfikatorZgloszenia': uuidv4(),
+                'DataUtworzenia': new Date().toISOString(),
+                'JednostkaSamorzadowa': 'Urzad Miasta (Demo)'
+            },
+            'ZasobDanych': {
+                'Opis': 'Wykaz rzeczy znalezionych - pojedynczy rekord',
+                'Format': 'CSV',
+                // TO JEST KLUCZOWE: Link do pliku z danymi
+                'UrlDoDanych': `${HOST_URL}/files/${csvFileName}` 
+            },
+            'Podsumowanie': {
+                'Kategoria': formData.kategoria,
+                'Nazwa': formData.nazwa,
+                'Status': 'DO_ODBIORU'
+            }
+        }
+    };
+    return builder.buildObject(xmlObj);
+}
 
-// --- 3. TESTOWY ENDPOINT QR (Łączy Krok 1, 2, 3 i 4) ---
-app.post('/api/test-qr', upload.single('dataFile'), async (req, res) => {
-    
-    if (!req.file) {
-        return res.status(400).json({ error: 'Brak pliku do wgrania.' });
-    }
-    
-    const tempFilePath = req.file.path;
-    
-    try {
-        // 1. Walidacja i Parsowanie XML
-        const zgloszenie = await validateAndNormalizeXml(tempFilePath);
-        const unikalnyId = zgloszenie.Naglowek.IdentyfikatorUnikalny;
-        
-        // 2. Generowanie QR
-        const linkDoPodgladu = `${BASE_QR_LINK}${unikalnyId}`; 
-        const qrFilename = `qr-${unikalnyId}.png`;
-        const qrPath = `temp_uploads/${qrFilename}`;
-        const qrPublicUrl = `http://localhost:${port}/qr_images/${qrFilename}`;
-        
-        await QRCode.toFile(qrPath, linkDoPodgladu);
-        
-        // 3. Czyszczenie tymczasowego pliku XML po weryfikacji
-        fs.unlinkSync(tempFilePath); 
-
-        // 4. Zwrócenie wyniku
-        res.status(200).json({
-            message: 'Sukces! Walidacja OK i Kod QR wygenerowany.',
-            unikalnyId: unikalnyId,
-            qrLink: linkDoPodgladu,
-            qrPublicUrl: qrPublicUrl // Gotowy link do obrazu QR dla frontendu
-        });
-
-    } catch (e) {
-        // Obsługa błędów z parsowania lub walidacji
-        if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
-        console.error('Błąd testu QR:', e.message);
-        res.status(400).json({ 
-            error: 'Błąd przetwarzania XML.', 
-            details: e.message 
-        });
-    }
-});
-
-
-// --- 4. ENDPOINT PUBLIKACJI (Krok 5 - Symulacja) ---
-// W prawdziwej aplikacji, ten endpoint przyjmie ID sesji/token
-// i opublikuje wcześniej zweryfikowany plik.
+// --- ENDPOINT: Publikacja Danych ---
 app.post('/api/publish-data', async (req, res) => {
-    
-    const { finalFilePath, apiKey } = req.body; 
+    try {
+        const formData = req.body;
+        const uniqueId = uuidv4();
 
-    // W normalnej wersji, tu powinno być sprawdzenie autoryzacji i wysyłka do CKAN.
-    
-    if (!apiKey || apiKey.length < 5) {
-        return res.status(401).json({ error: 'Brak lub niepoprawny klucz API.' });
+        // 1. Generowanie Pliku z Danymi (CSV)
+        const csvFilename = `dane_${uniqueId}.csv`;
+        const csvPath = path.join(PUBLIC_DIR, csvFilename);
+        const csvContent = generateCSV(formData);
+        fs.writeFileSync(csvPath, csvContent);
+
+        // 2. Generowanie Pliku Metadanych (XML) wskazującego na CSV
+        const xmlFilename = `meta_${uniqueId}.xml`;
+        const xmlPath = path.join(PUBLIC_DIR, xmlFilename);
+        const xmlContent = generateXML(csvFilename, formData);
+        fs.writeFileSync(xmlPath, xmlContent);
+
+        // 3. Generowanie QR kodu (kieruje do podglądu lub pliku XML)
+        // W realnym scenariuszu kierowałby do strony BIP z tym ogłoszeniem
+        const qrFilename = `qr_${uniqueId}.png`;
+        const qrPath = path.join(PUBLIC_DIR, qrFilename);
+        const linkDlaUrzednika = `${HOST_URL}/files/${xmlFilename}`; // QR kieruje do XML
+        await QRCode.toFile(qrPath, linkDlaUrzednika);
+
+        console.log(`[SUKCES] Opublikowano zgłoszenie: ${uniqueId}`);
+        console.log(`Link do CSV: ${HOST_URL}/files/${csvFilename}`);
+        console.log(`Link do XML: ${HOST_URL}/files/${xmlFilename}`);
+
+        res.status(200).json({
+            success: true,
+            message: 'Dane opublikowane w standardzie BIP/Dane.gov.pl',
+            files: {
+                xml: `${HOST_URL}/files/${xmlFilename}`,
+                csv: `${HOST_URL}/files/${csvFilename}`,
+                qr: `${HOST_URL}/files/${qrFilename}`
+            }
+        });
+
+    } catch (error) {
+        console.error('Błąd publikacji:', error);
+        res.status(500).json({ success: false, error: error.message });
     }
-
-    // Symulacja udanej publikacji
-    // UWAGA: Musisz upewnić się, że plik istnieje, jeśli został wgrany i tylko zweryfikowany!
-    // W tej testowej wersji, plik jest usuwany w /api/test-qr, więc ten endpoint 
-    // wymagałby, aby dane zostały zapisane w trwałym miejscu lub w bazie danych po walidacji.
-    
-    // Zastąpmy symulację udaną publikacją, jeśli klucz jest OK.
-    
-    res.status(200).json({ 
-        message: 'Krok 5: Publikacja (Symulacja) zakończona sukcesem! Dane są dostępne na dane.gov.pl.', 
-        ckanUrl: `https://dane.gov.pl/dataset/${DATASET_ID}`
-    });
-
 });
 
-
-// --- Uruchomienie serwera ---
+// --- Start Serwera ---
 app.listen(port, () => {
-    console.log(`Express Gateway działa na http://localhost:${port}`);
-    console.log(`Frontend URL dla QR: ${BASE_QR_LINK}`);
+    console.log(`Server "Jednego Okna" działa na porcie ${port}`);
+    console.log(`Katalog publiczny: ${PUBLIC_DIR}`);
 });
