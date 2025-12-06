@@ -1,4 +1,4 @@
-require('dotenv').config(); // Ładuje zmienne z pliku .env
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
@@ -10,18 +10,12 @@ const axios = require('axios');
 const FormData = require('form-data');
 
 const app = express();
-const port = process.env.PORT || 3001; // Port z chmury lub domyślny
+const port = process.env.PORT || 3001;
 
-// --- KONFIGURACJA Z PLIKU .ENV ---
-// To pozwala zmieniać adresy bez dotykania kodu!
-
-// Adres API portalu rządowego (lokalny lub produkcyjny)
+// --- KONFIGURACJA ---
 const PORTAL_API_URL = process.env.PORTAL_API_URL || 'http://localhost:8000/api/3/action/resource_create';
 const API_KEY = process.env.PORTAL_API_KEY; 
 const DATASET_ID = process.env.DATASET_ID; 
-
-// Publiczny adres Twojego serwera (żeby portal rządowy mógł pobrać plik)
-// Na produkcji to będzie np. https://twoja-aplikacja.pl
 const MY_PUBLIC_HOST = process.env.PUBLIC_HOST || `http://localhost:${port}`;
 
 const PUBLIC_DIR = path.join(__dirname, 'public_files');
@@ -31,44 +25,89 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use('/files', express.static(PUBLIC_DIR));
 
-// --- GENERATORY (Logika bez zmian) ---
+// --- GENERATORY ---
 
-function generateCSV(formData) {
-    const header = "ID,Kategoria,Podkategoria,Nazwa,Opis,Kolor,Marka,Stan,DataZnalezienia,Miejsce\n";
-    const escape = (t) => `"${(t || '').replace(/"/g, '""')}"`;
+// 1. ZAKTUALIZOWANA funkcja generateCSV (dodane Lat, Lon)
+function generateCSV(formData, id) { 
+    const header = "ID,Kategoria,Podkategoria,Nazwa,Opis,Kolor,Marka,Stan,DataZnalezienia,Miejsce,Lat,Lon\n";
+    const escape = (t) => `"${(t || '').toString().replace(/"/g, '""')}"`;
+    
+    const lat = formData.lat || '';
+    const lon = formData.lng || '';
+
     const row = [
-        uuidv4(), escape(formData.kategoria), escape(formData.podkategoria),
-        escape(formData.nazwa), escape(formData.opis), escape(formData.cechy?.kolor),
-        escape(formData.cechy?.marka), escape(formData.cechy?.stan),
-        escape(formData.data), escape(formData.miejsce)
+        id, // <--- TUTAJ UŻYWAMY PRZEKAZANEGO ID, A NIE uuidv4()
+        escape(formData.kategoria), 
+        escape(formData.podkategoria),
+        escape(formData.nazwa), 
+        escape(formData.opis), 
+        escape(formData.cechy?.kolor),
+        escape(formData.cechy?.marka), 
+        escape(formData.cechy?.stan),
+        escape(formData.data), 
+        escape(formData.miejsce),
+        escape(lat),
+        escape(lon)
     ].join(",");
+    
     return header + row;
 }
 
-function generateXML(csvFileName, formData) {
-    const builder = new xml2js.Builder();
+// Dodajemy argument 'id'
+function generateXML(csvFileName, formData, id) {
+    const builder = new xml2js.Builder({ headless: true });
+    
+    const lat = formData.lat ? formData.lat.toString() : null;
+    const lon = formData.lng ? formData.lng.toString() : null;
+
     const xmlObj = {
         'ZgloszenieZguby': {
-            '$': { 'xmlns': 'http://dane.gov.pl/standardy/rzeczy-znalezione' },
+            '$': { 
+                'xmlns': 'http://dane.gov.pl/standardy/zguby/v1',
+                'xmlns:xsi': 'http://www.w3.org/2001/XMLSchema-instance'
+            },
             'Naglowek': { 
-                'Identyfikator': uuidv4(), 
-                'CzasWytworzenia': new Date().toISOString() 
+                'IdentyfikatorUnikalny': id, // <--- TUTAJ TEŻ TO SAMO ID
+                'DataUtworzeniaRekordu': new Date().toISOString(),
+                'JednostkaSamorzadu': {
+                    'Nazwa': 'Urzad Miejski Demo',
+                    'KodTERYT': '0000000'
+                }
             },
-            'ZasobDanych': {
+            'Przedmiot': {
+                'KategoriaGlowna': formData.kategoria,
+                'Podkategoria': formData.podkategoria || '',
+                'NazwaPubliczna': formData.nazwa,
+                'OpisSzczegolowy': formData.opis || '',
+                'Cechy': {
+                    'Kolor': formData.cechy?.kolor || '',
+                    'Marka': formData.cechy?.marka || '',
+                    'Stan': formData.cechy?.stan || ''
+                }
+            },
+            'KontekstZnalezienia': {
+                'DataZnalezienia': formData.data,
+                'MiejsceOpis': formData.miejsce || '',
+                // Dodajemy sekcję LokalizacjaGeo tylko jeśli mamy współrzędne
+                ...(lat && lon && {
+                    'LokalizacjaGeo': {
+                        'Lat': lat,
+                        'Lon': lon
+                    }
+                })
+            },
+            'ZrodloDanych': {
                 'Format': 'CSV',
-                // Kluczowe: ten link musi być dostępny z internetu!
                 'UrlDoDanych': `${MY_PUBLIC_HOST}/files/${csvFileName}` 
-            },
-            'Opis': { 
-                'Tytul': `Zguba: ${formData.nazwa}`,
-                'Kategoria': formData.kategoria 
             }
         }
     };
-    return builder.buildObject(xmlObj);
+    
+    // Dodajemy standardowy nagłówek XML
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' + builder.buildObject(xmlObj);
 }
 
-// --- WYSYŁKA DO PORTALU ---
+// --- WYSYŁKA DO PORTALU (Bez zmian) ---
 async function pushToPortal(filePath, fileName, title) {
     if (!API_KEY) {
         console.warn('[API] Brak klucza API w .env - pomijam wysyłkę.');
@@ -102,14 +141,16 @@ async function pushToPortal(filePath, fileName, title) {
     }
 }
 
-// --- ENDPOINT ---
+// --- ENDPOINT (Bez większych zmian, tylko logika wywołania) ---
 app.post('/api/publish-data', async (req, res) => {
     try {
         const formData = req.body;
-        const uniqueId = uuidv4();
+        if (!formData) throw new Error("Brak danych formularza");
 
-        // 1. Pliki
-        const csvName = `dane_${uniqueId}.csv`;
+        // TO JEST GŁÓWNE ID DLA CAŁEGO PROCESU
+        const uniqueId = uuidv4(); 
+
+        const csvName = `dane_${uniqueId}.csv`; // ID w nazwie pliku
         const xmlName = `meta_${uniqueId}.xml`;
         const qrName = `qr_${uniqueId}.png`;
 
@@ -117,13 +158,18 @@ app.post('/api/publish-data', async (req, res) => {
         const xmlPath = path.join(PUBLIC_DIR, xmlName);
         const qrPath = path.join(PUBLIC_DIR, qrName);
 
-        fs.writeFileSync(csvPath, generateCSV(formData));
-        fs.writeFileSync(xmlPath, generateXML(csvName, formData));
+        // PRZEKAZUJEMY uniqueId DO FUNKCJI:
+        const csvContent = generateCSV(formData, uniqueId); 
+        const xmlContent = generateXML(csvName, formData, uniqueId);
 
-        // 2. Wysyłka (zależna od konfiguracji w .env)
+        // Zapis na dysk
+        fs.writeFileSync(csvPath, csvContent);
+        fs.writeFileSync(xmlPath, xmlContent);
+
+        // 2. Wysyłka
         const portalUrl = await pushToPortal(xmlPath, xmlName, formData.nazwa);
 
-        // 3. QR
+        // 3. QR (Linkuje do portalu jeśli się udało, inaczej lokalnie do XML)
         const finalUrl = portalUrl || `${MY_PUBLIC_HOST}/files/${xmlName}`;
         await QRCode.toFile(qrPath, finalUrl);
 
@@ -138,7 +184,7 @@ app.post('/api/publish-data', async (req, res) => {
         });
 
     } catch (error) {
-        console.error(error);
+        console.error("Błąd serwera:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
