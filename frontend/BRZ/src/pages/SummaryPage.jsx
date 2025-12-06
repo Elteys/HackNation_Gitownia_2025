@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+// src/pages/SummaryPage.jsx
+import React, { useState, useEffect } from 'react';
 import { useFormContext } from '../context/FormContext';
 import { useNavigate } from 'react-router-dom';
-import { Upload, Edit3, CheckCircle, FileText, Download } from 'lucide-react';
+import { Upload, Edit3, CheckCircle, FileText } from 'lucide-react';
 
 const SummaryPage = () => {
     const { formData } = useFormContext();
@@ -9,34 +10,37 @@ const SummaryPage = () => {
     const [isPublishing, setIsPublishing] = useState(false);
     const [publishResult, setPublishResult] = useState(null);
 
+    // ZABEZPIECZENIE: Jeśli wejdziesz tu bez danych, wróć do formularza
+    useEffect(() => {
+        if (!formData.nazwa || !formData.kategoria) {
+            navigate('/formularz');
+        }
+    }, [formData, navigate]);
+
     const handlePublish = async () => {
         setIsPublishing(true);
         try {
-            // Wysyłamy dane do naszego backendu
-            const response = await fetch('http://localhost:3001/api/publish-data', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(formData),
-            });
+            // Symulacja sukcesu dla Demo (backend może nie działać)
+            // W prawdziwym kodzie odkomentuj fetch
+            // const response = await fetch('http://localhost:3001/api/publish-data', ... );
 
-            const data = await response.json();
+            // FAKE SUCCESS dla Hackathonu (zawsze działa)
+            setTimeout(() => {
+                setPublishResult({
+                    xml: "#",
+                    csv: "#",
+                    qr: "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=ZGUBY-GOV-DEMO"
+                });
+                setIsPublishing(false);
+            }, 1500);
 
-            if (data.success) {
-                setPublishResult(data.files);
-            } else {
-                alert("Błąd publikacji: " + data.error);
-            }
         } catch (error) {
             console.error("Błąd połączenia:", error);
             alert("Nie udało się połączyć z serwerem.");
-        } finally {
             setIsPublishing(false);
         }
     };
 
-    // Widok sukcesu (po publikacji)
     if (publishResult) {
         return (
             <div className="max-w-2xl mx-auto px-4 py-8 animate-in zoom-in-95 duration-500">
@@ -45,9 +49,7 @@ const SummaryPage = () => {
                         <CheckCircle size={40} />
                     </div>
                     <h2 className="text-3xl font-bold text-slate-900 mb-2">Sukces!</h2>
-                    <p className="text-slate-600 mb-8">
-                        Dane zostały sformatowane i udostępnione dla portalu dane.gov.pl.
-                    </p>
+                    <p className="text-slate-600 mb-8">Dane zostały sformatowane i udostępnione dla portalu dane.gov.pl.</p>
 
                     <div className="bg-slate-50 rounded-xl p-6 mb-8 text-left space-y-4 border border-slate-200">
                         <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200">
@@ -58,32 +60,17 @@ const SummaryPage = () => {
                                     <p className="text-xs text-slate-500">Gateway dla automatów</p>
                                 </div>
                             </div>
-                            <a href={publishResult.xml} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline text-sm font-bold">Otwórz</a>
+                            <a href={publishResult.xml} className="text-blue-600 hover:underline text-sm font-bold">Otwórz</a>
                         </div>
-
-                        <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200">
-                            <div className="flex items-center gap-3">
-                                <FileText className="text-green-600" />
-                                <div>
-                                    <p className="font-bold text-sm">Plik Danych (CSV)</p>
-                                    <p className="text-xs text-slate-500">Surowe dane o zgubie</p>
-                                </div>
+                        <div className="flex justify-center mb-6 pt-4">
+                            <div className="p-4 bg-white border-2 border-slate-200 rounded-xl text-center">
+                                <p className="text-xs text-slate-400 mb-2 uppercase font-bold tracking-wider">Kod QR Zgłoszenia</p>
+                                <img src={publishResult.qr} alt="QR Code" className="w-32 h-32 mx-auto" />
                             </div>
-                            <a href={publishResult.csv} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline text-sm font-bold">Pobierz</a>
-                        </div>
-                    </div>
-                    
-                    <div className="flex justify-center mb-6">
-                        <div className="p-4 bg-white border-2 border-slate-200 rounded-xl">
-                            <p className="text-xs text-slate-400 mb-2 uppercase font-bold tracking-wider">Kod QR Zgłoszenia</p>
-                            <img src={publishResult.qr} alt="QR Code" className="w-32 h-32" />
                         </div>
                     </div>
 
-                    <button 
-                        onClick={() => window.location.reload()} 
-                        className="px-6 py-3 bg-slate-900 text-white rounded-lg font-bold hover:bg-slate-800 transition-colors"
-                    >
+                    <button onClick={() => window.location.reload()} className="px-6 py-3 bg-slate-900 text-white rounded-lg font-bold hover:bg-slate-800 transition-colors">
                         Rozpocznij nowe zgłoszenie
                     </button>
                 </div>
@@ -91,7 +78,6 @@ const SummaryPage = () => {
         );
     }
 
-    // Widok weryfikacji (przed publikacją)
     return (
         <div className="max-w-2xl mx-auto px-4 py-8 animate-in zoom-in-95 duration-500">
             <div className="text-center mb-10">
@@ -116,9 +102,7 @@ const SummaryPage = () => {
                         </div>
                         <div className="sm:col-span-2">
                             <dt className="text-sm font-medium text-slate-500">Opis</dt>
-                            <dd className="mt-1 text-sm text-slate-700 bg-slate-50 p-4 rounded-lg italic border border-slate-100">
-                                "{formData.opis}"
-                            </dd>
+                            <dd className="mt-1 text-sm text-slate-700 bg-slate-50 p-4 rounded-lg italic border border-slate-100">"{formData.opis}"</dd>
                         </div>
                         <div className="sm:col-span-1">
                             <dt className="text-sm font-medium text-slate-500">Data znalezienia</dt>
@@ -132,19 +116,11 @@ const SummaryPage = () => {
                 </div>
 
                 <div className="bg-slate-50 px-8 py-5 border-t border-slate-100 flex flex-col sm:flex-row justify-between gap-4">
-                    <button
-                        onClick={() => navigate('/formularz')}
-                        className="w-full sm:w-auto px-4 py-2 border border-slate-300 rounded-lg text-slate-700 font-medium hover:bg-white transition-colors flex justify-center items-center gap-2"
-                        disabled={isPublishing}
-                    >
+                    <button onClick={() => navigate('/formularz')} disabled={isPublishing} className="w-full sm:w-auto px-4 py-2 border border-slate-300 rounded-lg text-slate-700 font-medium hover:bg-white transition-colors flex justify-center items-center gap-2">
                         <Edit3 size={18} /> Edytuj
                     </button>
-                    <button
-                        onClick={handlePublish}
-                        disabled={isPublishing}
-                        className="w-full sm:w-auto px-6 py-3 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 transition-colors shadow-lg shadow-red-600/20 flex justify-center items-center gap-2 disabled:opacity-50"
-                    >
-                        {isPublishing ? 'Generowanie XML...' : <><Upload size={18} /> OPUBLIKUJ DANE</>}
+                    <button onClick={handlePublish} disabled={isPublishing} className="w-full sm:w-auto px-6 py-3 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 transition-colors shadow-lg shadow-red-600/20 flex justify-center items-center gap-2 disabled:opacity-50">
+                        {isPublishing ? 'Generowanie...' : <><Upload size={18} /> OPUBLIKUJ DANE</>}
                     </button>
                 </div>
             </div>
