@@ -1,14 +1,71 @@
-/* To ładuje całego Tailwinda v4 */
+/* 1. NAJWAŻNIEJSZE: Import Tailwinda (Musi być na górze!) */
 @import "tailwindcss";
 
-/* To ładuje plugin do animacji (jeśli go używamy) */
+/* 2. Plugin do animacji */
 @plugin "tailwindcss-animate";
 
-/* Nasze globalne style */
+/* 3. Konfiguracja fontów i tła */
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
 }
 
 body {
-  @apply bg-slate-50 text-slate-900;
+  @apply bg-slate-50 text-slate-900 antialiased;
+}
+
+/* 4. UTILITIES: Nasz Focus dla WCAG (Musi być po imporcie Tailwinda) */
+@layer utilities {
+  .focus-gov {
+    @apply focus:outline-none focus-visible:ring-4 focus-visible:ring-yellow-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white;
+  }
+}
+
+/* 5. WYSOKI KONTRAST (Style nadpisujące) */
+/* Ważne: Te style aktywują się TYLKO gdy body ma klasę .high-contrast */
+
+body.high-contrast {
+  background-color: #000000 !important;
+  color: #ffff00 !important;
+}
+
+body.high-contrast * {
+  background-color: #000000 !important;
+  color: #ffff00 !important;
+  border-color: #ffff00 !important;
+  box-shadow: none !important;
+}
+
+/* Wyjątki dla obrazków w kontraście */
+body.high-contrast img,
+body.high-contrast svg {
+  background-color: transparent !important;
+  filter: grayscale(100%) contrast(120%);
+}
+
+/* Wyjątki dla inputów i przycisków */
+body.high-contrast button,
+body.high-contrast input,
+body.high-contrast select,
+body.high-contrast textarea {
+  border: 2px solid #ffff00 !important;
+  background-color: #000000 !important;
+}
+
+body.high-contrast button:hover {
+  background-color: #ffff00 !important;
+  color: #000000 !important;
+}
+
+body.high-contrast a {
+  text-decoration: underline !important;
+  color: #ffff00 !important;
+}
+
+/* Focus w kontraście */
+body.high-contrast *:focus-visible {
+  outline: 4px solid #ffff00 !important;
+  outline-offset: 4px !important;
+  box-shadow: none !important;
 }
