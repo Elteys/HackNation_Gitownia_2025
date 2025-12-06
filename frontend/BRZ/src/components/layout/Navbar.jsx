@@ -2,6 +2,7 @@ import React from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import WcagTools from '../ui/WcagTools'; // <-- Import
+import Herb_Polski from "../../../public/Herb_Polski.svg"
 
 const Navbar = () => {
     return (
@@ -13,9 +14,7 @@ const Navbar = () => {
 
                     {/* LOGO */}
                     <Link to="/" className="flex items-center gap-3 group">
-                        <div className="w-10 h-10 bg-blue-900 rounded-lg flex items-center justify-center text-white shadow-lg group-hover:scale-105 transition-transform">
-                            <span className="font-bold text-xs">RP</span>
-                        </div>
+                        <img src={Herb_Polski} alt="Herb" className='h-10 w-9' />
                         <div className="flex flex-col">
                             <span className="text-lg font-bold text-slate-800 leading-tight">Odnalezione Zguby</span>
                             <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Portal Urzędnika</span>
