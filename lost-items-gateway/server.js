@@ -69,7 +69,7 @@ async function writeRecords(records) {
         quoted: true // Bezpieczeństwo: zawsze w cudzysłowach
     });
 
-    await fs.writeFile(CSV_FILE_PATH, output, 'utf8');
+    await fs.writeFile(CSV_FILE_PATH, '\uFEFF' + output, 'utf8');
 }
 
 
