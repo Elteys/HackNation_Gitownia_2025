@@ -105,7 +105,7 @@ const DetailsPage = () => {
                 <div className={`w-full py-4 px-8 flex items-center justify-between font-bold tracking-wider uppercase text-sm transition-colors duration-300 
             ${isReturned
                         ? 'bg-slate-500 text-white'  // Stan: Wydano (Szary tło, biały tekst)
-                        : 'bg-white text-green-700 border-b-2 border-green-100' // Stan: W magazynie (Białe tło, zielony tekst)
+                        : 'bg-white text-black border-b-2 border-gray-100' // Stan: W magazynie (Białe tło, zielony tekst)
                     }`}>
                     <span className="flex items-center gap-2">
                         <Package size={18} /> STATUS MAGAZYNOWY:
