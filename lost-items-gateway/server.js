@@ -66,7 +66,7 @@ async function getCsvFilePath() {
 
 async function readRecords() {
     try {
-        const filePath = await getCsvFilePath(); // Dynamiczna ścieżka
+        const filePath = await getCsvFilePath(); 
         await fs.access(filePath);
         const content = await fs.readFile(filePath, 'utf8');
         
