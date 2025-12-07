@@ -262,23 +262,27 @@ app.get('/api/csv/:office', async (req, res) => {
         res.status(500).json({ success: false, error: "Błąd serwera przy pobieraniu CSV" });
     }
 });
-// 5. Pobranie zguby.xml
-app.get('/api/zguby', async (req, res) => {
-    try {
-        if (!fsSync.existsSync(zguby_XML_PATH)) {
-            return res.status(404).json({ success: false, error: "Nie znaleziono pliku zguby.xml" });
-        }
 
-        res.setHeader('Content-Disposition', `attachment; filename="zguby.xml"`);
-        res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+app.get('/api/zguby', (req, res) => {
+    // 1. Logowanie dla celów debugowania
+    console.log(`[INFO] Próba pobrania XML z: ${XML_PATH}`);
 
-        const xmlContent = await fs.readFile(zguby_XML_PATH, 'utf8');
-        res.send(xmlContent);
-
-    } catch (error) {
-        console.error("Błąd pobierania zguby.xml:", error);
-        res.status(500).json({ success: false, error: "Błąd serwera przy pobieraniu zguby.xml" });
+    // 2. Sprawdzenie czy plik istnieje
+    if (!fsSync.existsSync(XML_PATH)) {
+        console.error("[BŁĄD] Plik zguby.xml nie istnieje w podanej ścieżce!");
+        return res.status(404).json({ success: false, error: "Nie znaleziono pliku zguby.xml" });
     }
+
+    // 3. Użycie res.download - Express sam ogarnie nagłówki i Content-Type
+    res.download(XML_PATH, 'zguby.xml', (err) => {
+        if (err) {
+            console.error("[BŁĄD] Błąd podczas wysyłania pliku:", err);
+            // Sprawdzamy, czy nagłówki nie zostały już wysłane, żeby nie zawiesić serwera
+            if (!res.headersSent) {
+                res.status(500).send("Błąd serwera przy pobieraniu pliku.");
+            }
+        }
+    });
 });
 
 
