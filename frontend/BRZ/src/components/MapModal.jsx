@@ -1,3 +1,4 @@
+// src/components/MapModal.jsx
 import React, { useEffect, useRef, useState } from 'react';
 import { X, Check, MapPin, Loader2 } from 'lucide-react';
 
@@ -11,6 +12,7 @@ const MapModal = ({ isOpen, onClose, currentCoords, onSaveLocation }) => {
 	const [newCoords, setNewCoords] = useState(currentCoords);
 	const [address, setAddress] = useState('Ładowanie adresu...');
 
+	// Funkcja do geokodowania (współrzędne -> adres)
 	const geocode = (latLng) => {
 		if (!window.google || !window.google.maps || !window.google.maps.Geocoder)
 			return;
@@ -25,6 +27,7 @@ const MapModal = ({ isOpen, onClose, currentCoords, onSaveLocation }) => {
 		});
 	};
 
+	// Efekt do inicjalizacji mapy w modalu
 	useEffect(() => {
 		if (!isOpen || !window.google || !window.google.maps) return;
 
@@ -32,6 +35,7 @@ const MapModal = ({ isOpen, onClose, currentCoords, onSaveLocation }) => {
 
 		const latLng = new window.google.maps.LatLng(newCoords.lat, newCoords.lng);
 
+		// Inicjalizacja Mapy
 		mapObjectRef.current = new window.google.maps.Map(mapElementRef.current, {
 			center: latLng,
 			zoom: 17,
@@ -39,13 +43,15 @@ const MapModal = ({ isOpen, onClose, currentCoords, onSaveLocation }) => {
 			streetViewControl: false,
 		});
 
+		// Inicjalizacja Pinezki (Markera)
 		markerObjectRef.current = new window.google.maps.Marker({
 			position: latLng,
 			map: mapObjectRef.current,
-			draggable: true,
+			draggable: true, // Możliwość przeciągania!
 			title: 'Przeciągnij, aby ustawić dokładną lokalizację',
 		});
 
+		// Nasłuchiwanie na koniec przeciągania
 		markerObjectRef.current.addListener('dragend', () => {
 			const newPosition = markerObjectRef.current.getPosition();
 			const lat = newPosition.lat();
@@ -54,19 +60,22 @@ const MapModal = ({ isOpen, onClose, currentCoords, onSaveLocation }) => {
 			geocode(newPosition);
 		});
 
+		// Natychmiastowe geokodowanie początkowej pozycji
 		geocode(latLng);
 
 		setLoading(false);
 	}, [isOpen]);
 
+	// Obsługa zapisu i zamknięcia
 	const handleSave = () => {
-		onSaveLocation(address, newCoords);
+		onSaveLocation(address, newCoords); // Przekazujemy adres i współrzędne
 		onClose();
 	};
 
 	return (
 		<div className="fixed inset-0 z-[100] bg-black/70 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
 			<div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col transform scale-95 animate-in zoom-in duration-300">
+				{/* Header Modalu */}
 				<div className="flex justify-between items-center p-4 border-b border-slate-100">
 					<h3 className="text-xl font-bold text-slate-800 flex items-center gap-3">
 						<MapPin className="text-red-600" size={24} />
@@ -80,6 +89,7 @@ const MapModal = ({ isOpen, onClose, currentCoords, onSaveLocation }) => {
 					</button>
 				</div>
 
+				{/* Status Adresu */}
 				<div className="p-4 bg-slate-50 border-b border-slate-100">
 					<p className="text-sm font-medium text-slate-700">
 						Adres na podstawie pinezki:
@@ -89,12 +99,14 @@ const MapModal = ({ isOpen, onClose, currentCoords, onSaveLocation }) => {
 					</p>
 				</div>
 
+				{/* Kontener Mapy */}
 				<div className="flex-grow relative">
 					<div
 						ref={mapElementRef}
 						id="full-map-container"
 						className="h-full w-full"
 					>
+						{/* Mapa zostanie wyrenderowana tutaj */}
 					</div>
 					{loading && (
 						<div className="absolute inset-0 bg-white/80 flex items-center justify-center text-blue-600">
@@ -104,6 +116,7 @@ const MapModal = ({ isOpen, onClose, currentCoords, onSaveLocation }) => {
 					)}
 				</div>
 
+				{/* Footer Modalu */}
 				<div className="p-4 border-t border-slate-100 flex justify-end gap-3">
 					<button
 						onClick={onClose}

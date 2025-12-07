@@ -1,3 +1,4 @@
+// src/pages/DetailsPage.jsx
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle, Package, Calendar, MapPin, UserCheck, AlertCircle, SearchX } from 'lucide-react';
@@ -11,15 +12,18 @@ const DetailsPage = () => {
     const [error, setError] = useState(null);
     const [isReturned, setIsReturned] = useState(false);
 
+    // 1. POBIERANIE DANYCH
     useEffect(() => {
         const fetchItemDetails = async () => {
             setLoading(true);
-            setError(null);
+            setError(null); // Reset błędów przy nowym pobieraniu
 
             try {
+                // Strzelamy do endpointu, który czyta z CSV
                 const response = await fetch(`https://localhost:3001/api/item/${id}`);
 
                 if (!response.ok) {
+                    // Jeśli serwer zwróci 404 lub 500, rzucamy błąd
                     if (response.status === 404) throw new Error("Nie znaleziono zguby o podanym numerze ID.");
                     throw new Error("Błąd serwera. Spróbuj ponownie później.");
                 }
@@ -31,6 +35,7 @@ const DetailsPage = () => {
 
             } catch (err) {
                 console.error("Błąd pobierania:", err);
+                // Ustawiamy błąd i czyścimy item, żeby nie wyświetlić śmieci
                 setError(err.message || "Wystąpił nieoczekiwany błąd.");
                 setItem(null); 
             } finally {
@@ -41,6 +46,7 @@ const DetailsPage = () => {
         fetchItemDetails();
     }, [id]);
 
+    // 2. OBSŁUGA PRZYCISKU "ODBIERZ"
     const handleMarkAsReturned = async () => {
         if (!confirm("Czy na pewno chcesz oznaczyć ten przedmiot jako WYDANY właścicielowi?")) return;
 
@@ -61,6 +67,9 @@ const DetailsPage = () => {
         }
     };
 
+    // --- WIDOKI STANÓW ---
+
+    // A. Ładowanie
     if (loading) {
         return (
             <div className="min-h-[60vh] flex flex-col items-center justify-center text-slate-500 gap-4">
@@ -70,6 +79,7 @@ const DetailsPage = () => {
         );
     }
 
+    // B. Błąd / Brak Wyniku (To o co prosiłeś)
     if (error || !item) {
         return (
             <div className="max-w-2xl mx-auto px-4 py-12 animate-in zoom-in-95 duration-300">
@@ -102,9 +112,11 @@ const DetailsPage = () => {
         );
     }
 
+    // C. Widok Szczegółów (Tylko jeśli item istnieje)
     return (
         <div className="max-w-6xl mx-auto px-4 py-8 animate-in fade-in duration-500">
 
+            {/* Nawigacja powrotna */}
             <button
                 onClick={() => navigate('/')}
                 className="mb-6 flex items-center text-slate-500 hover:text-blue-900 transition-colors px-2 py-1 rounded-lg font-medium"
@@ -112,8 +124,10 @@ const DetailsPage = () => {
                 <ArrowLeft size={20} className="mr-2" /> Wróć do wyszukiwarki
             </button>
 
+            {/* KARTA GŁÓWNA */}
             <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden relative">
 
+                {/* STATUS BAR */}
                 <div className={`w-full py-4 px-8 flex items-center justify-between font-bold tracking-wider uppercase text-sm transition-colors duration-300 
                     ${isReturned
                         ? 'bg-slate-600 text-white'
@@ -132,6 +146,7 @@ const DetailsPage = () => {
                 </div>
 
                 <div className="p-8 md:p-10">
+                    {/* NAGŁÓWEK */}
                     <div className="flex flex-col md:flex-row justify-between items-start gap-6 mb-8 border-b border-slate-100 pb-8">
                         <div>
                             <span className="bg-blue-50 text-blue-700 border border-blue-100 text-xs px-3 py-1.5 rounded-full font-bold uppercase tracking-wider mb-3 inline-block">
@@ -147,6 +162,7 @@ const DetailsPage = () => {
                         </div>
                     </div>
 
+                    {/* GRID SZCZEGÓŁÓW */}
                     <div className="grid md:grid-cols-2 gap-8 mb-10">
                         <div className="space-y-6 py-4">
                             <div>
@@ -170,6 +186,7 @@ const DetailsPage = () => {
                             <p className="text-slate-700 italic leading-relaxed text-lg">
                                 "{item.opis}"
                             </p>
+                            {/* Cechy */}
                             <div className="mt-6 flex flex-wrap gap-2">
                                 {item.cechy?.kolor && <span className="px-3 py-1.5 bg-white border-2 border-slate-100 text-xs rounded-lg text-slate-600 uppercase font-bold">Kolor: <b className="text-slate-900">{item.cechy.kolor}</b></span>}
                                 {item.cechy?.marka && <span className="px-3 py-1.5 bg-white border-2 border-slate-100 text-xs rounded-lg text-slate-600 uppercase font-bold">Marka: <b className="text-slate-900">{item.cechy.marka}</b></span>}
@@ -178,6 +195,7 @@ const DetailsPage = () => {
                         </div>
                     </div>
 
+                    {/* SEKCJA ACTION: PRZYCISK ODBIORU */}
                     <div className="mt-8 pt-8 border-t-2 border-dashed border-slate-200">
                         {isReturned ? (
                             <div className="bg-slate-50 border-2 border-slate-200 rounded-2xl p-8 text-center">

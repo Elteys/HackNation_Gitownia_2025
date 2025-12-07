@@ -9,7 +9,7 @@ const { v4: uuidv4 } = require('uuid');
 const { parse } = require('csv-parse/sync');
 const { stringify } = require('csv-stringify/sync');
 const https = require('https');
-const xml2js = require('xml2js');
+const xml2js = require('xml2js'); 
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -49,6 +49,7 @@ async function getCsvFilePath() {
             throw new Error(`Nie znaleziono w XML datasetu o ID: ${OFFICE_ID}`);
         }
 
+        // URL w XML: https://localhost:3001/api/csv/Starostwo_Powiatowe_Gryfino
         const urlParts = targetDataset.url.split('/');
         const fileNameBase = urlParts[urlParts.length - 1];
         
@@ -63,6 +64,7 @@ async function getCsvFilePath() {
         return path.join(CSV_DIR, 'backup_data.csv');
     }
 }
+
 
 async function readRecords() {
     try {
@@ -100,7 +102,6 @@ async function writeRecords(records) {
 
     await fs.writeFile(filePath, '\uFEFF' + output, 'utf8');
 }
-
 
 app.post('/api/publish-data', async (req, res) => {
     try {
