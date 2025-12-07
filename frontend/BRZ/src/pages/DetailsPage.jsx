@@ -20,7 +20,7 @@ const DetailsPage = () => {
 
             try {
                 // Strzelamy do endpointu, który czyta z CSV
-                const response = await fetch(`http://localhost:3001/api/item/${id}`);
+                const response = await fetch(`https://localhost:3001/api/item/${id}`);
 
                 if (!response.ok) {
                     // Jeśli serwer zwróci 404 lub 500, rzucamy błąd
@@ -51,7 +51,7 @@ const DetailsPage = () => {
         if (!confirm("Czy na pewno chcesz oznaczyć ten przedmiot jako WYDANY właścicielowi?")) return;
 
         try {
-            const response = await fetch(`http://localhost:3001/api/item/${id}/return`, {
+            const response = await fetch(`https://localhost:3001/api/item/${id}/return`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             });
