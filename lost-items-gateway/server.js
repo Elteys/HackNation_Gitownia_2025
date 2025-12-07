@@ -8,27 +8,30 @@ const QRCode = require('qrcode');
 const { v4: uuidv4 } = require('uuid');
 const { parse } = require('csv-parse/sync'); // Nowa biblioteka do czytania
 const { stringify } = require('csv-stringify/sync'); // Nowa biblioteka do zapisu
+const https = require('https'); // Upewnij się, że masz to na górze pliku!
 
 const app = express();
 const port = process.env.PORT || 3001;
 
 // --- KONFIGURACJA ---
-const MY_PUBLIC_HOST = process.env.PUBLIC_HOST || `http://localhost:${port}`;
+const MY_PUBLIC_HOST = process.env.PUBLIC_HOST || `https://localhost:${port}`;
 // Zmieniamy na link, który podałeś w pytaniu (z hashem #)
-const FRONTEND_URL = 'http://localhost:3000/#/szczegoly'; 
+const FRONTEND_URL = 'https://localhost:5173/#/szczegoly'; 
 
 const OFFICE_NAME = "Starostwo_Powiatowe_Gryfino"; 
 const MASTER_CSV_FILENAME = `${OFFICE_NAME}.csv`;
 
-const BASE_OUTPUT_DIR = path.join(__dirname, 'output');
+const BASE_OUTPUT_DIR = path.join(__dirname, 'public_files');
 const CSV_DIR = path.join(BASE_OUTPUT_DIR, 'csv');
 const QR_DIR = path.join(BASE_OUTPUT_DIR, 'qr');
 
+// Upewnij się, że katalogi istnieją
 if (!fsSync.existsSync(CSV_DIR)) fsSync.mkdirSync(CSV_DIR, { recursive: true });
 if (!fsSync.existsSync(QR_DIR)) fsSync.mkdirSync(QR_DIR, { recursive: true });
 
-app.use(cors());
+app.use(cors({ origin: '*' }));
 app.use(express.json({ limit: '10mb' }));
+// Udostępniamy pliki statycznie
 app.use('/files', express.static(BASE_OUTPUT_DIR));
 
 // Ścieżka do głównego pliku
@@ -107,7 +110,7 @@ app.post('/api/publish-data', async (req, res) => {
         // 3. Zapisz całość
         await writeRecords(records);
 
-        // 4. Generuj QR (Linkuje do: http://localhost:3000/#/szczegoly/UUID)
+        // 4. Generuj QR (Linkuje do frontendu)
         const linkToItem = `${FRONTEND_URL}/${uniqueId}`;
         await QRCode.toFile(qrPath, linkToItem);
 
@@ -147,6 +150,8 @@ app.get('/api/item/:id', async (req, res) => {
             opis: item.Opis,
             data: item.DataZnalezienia,
             miejsce: item.Miejsce,
+            lat: parseFloat(item.Lat),
+            lng: parseFloat(item.Lon),
             cechy: {
                 kolor: item.Kolor,
                 marka: item.Marka,
@@ -190,7 +195,20 @@ app.post('/api/item/:id/return', async (req, res) => {
     }
 });
 
-app.listen(port, () => {
-    console.log(`Serwer działa na porcie ${port}`);
-    console.log(`Baza danych (CSV): ${CSV_FILE_PATH}`);
-});
+// Wczytujemy certyfikaty wygenerowane przez mkcert
+try {
+    // Szukamy plików w tym samym folderze co server.js
+    const httpsOptions = {
+        key: fsSync.readFileSync(path.join(__dirname, 'localhost-key.pem')),
+        cert: fsSync.readFileSync(path.join(__dirname, 'localhost.pem'))
+    };
+
+    https.createServer(httpsOptions, app).listen(port, () => {
+        console.log(`Bezpieczny serwer HTTPS działa na porcie ${port}`);
+        console.log(`https://localhost:${port}`);
+    });
+} catch (error) {
+    console.error("BŁĄD HTTPS: Nie znaleziono plików .pem! Uruchamiam zwykłe HTTP.");
+    console.error("Upewnij się, że pliki localhost.pem i localhost-key.pem są w folderze:", __dirname);
+    app.listen(port, () => console.log(`Http server: http://localhost:${port}`));
+}
