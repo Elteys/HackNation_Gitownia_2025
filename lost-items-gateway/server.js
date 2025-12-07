@@ -40,10 +40,26 @@ const CSV_FILE_PATH = path.join(CSV_DIR, MASTER_CSV_FILENAME);
 // --- CSV HELPERS ---
 async function readRecords() {
     try {
+        // Sprawdzamy czy plik istnieje
         await fs.access(CSV_FILE_PATH);
         const content = await fs.readFile(CSV_FILE_PATH, 'utf8');
-        return parse(content, { columns: true, skip_empty_lines: true, trim: true });
-    } catch {
+        
+        // --- KLUCZOWA POPRAWKA ---
+        // Usuwamy BOM (\uFEFF) jeśli istnieje na początku pliku
+        // Bez tego csv-parse myśli, że pierwszy nagłówek jest uszkodzony
+        let cleanContent = content;
+        if (cleanContent.charCodeAt(0) === 0xFEFF) {
+            cleanContent = cleanContent.slice(1);
+        }
+
+        return parse(cleanContent, { 
+            columns: true, 
+            skip_empty_lines: true, 
+            trim: true,
+            relax_quotes: true
+        });
+    } catch (e) {
+        // Jeśli plik nie istnieje lub jest pusty, zwracamy pustą tablicę
         return [];
     }
 }
