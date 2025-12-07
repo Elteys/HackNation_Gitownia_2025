@@ -1,7 +1,6 @@
 import React from 'react';
 import { HashRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion'; 
-import { AnimatePresence } from 'framer-motion';
 import { FormProvider } from './context/FormContext';
 import { AccessibilityProvider } from './context/AccessibilityContext';
 import DetailsPage from './pages/DetailsPage';
@@ -14,7 +13,6 @@ import FormPage from './pages/FormPage';
 import SummaryPage from './pages/SummaryPage';
 
 import PageTransition from './components/layout/PageTransition'; 
-import PageTransition from './components/layout/PageTransition';
 
 const AnimatedRoutes = () => {
   const location = useLocation();
